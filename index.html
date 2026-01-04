@@ -1170,7 +1170,7 @@
                 
                 if (nmccValue !== undefined && nmccValue !== null && nmccValue !== '') {
                     nmcc = parseFloat(nmccValue.toString().replace(/\s/g, '').replace(',', '.'));
-                    if (!isNaN(nmcc) && isFinite(nmcc) && nmcc >= 0) {
+                    if (!isNaN(nmcc) && isFinite(nmcc) && nmcc > 0) {
                         hasNmcc = true;
                     }
                 }
@@ -1181,7 +1181,7 @@
                 
                 if (bidValue !== undefined && bidValue !== null && bidValue !== '') {
                     bidCount = parseFloat(bidValue.toString().replace(/\s/g, '').replace(',', '.'));
-                    if (!isNaN(bidCount) && isFinite(bidCount) && bidCount >= 0) {
+                    if (!isNaN(bidCount) && isFinite(bidCount) && bidCount > 0) {
                         hasBidCount = true;
                     }
                 }
@@ -1195,7 +1195,7 @@
                     
                     const winningPrice = parseFloat(winningPriceValue.toString().replace(/\s/g, '').replace(',', '.'));
                     
-                    if (!isNaN(winningPrice) && isFinite(winningPrice) && winningPrice >= 0 &&
+                    if (!isNaN(winningPrice) && isFinite(winningPrice) && winningPrice > 0 &&
                         !isNaN(nmcc) && isFinite(nmcc) && nmcc > 0) {
                         
                         // Вычисляем % падения цены: (1 - цена победителя / НМЦК) * 100%
@@ -1330,9 +1330,12 @@
 
         // Функция для вычисления медианы
         function calculateMedian(values) {
-            if (!values || values.length === 0) return 0;
+            if (!values || values.length === 0) return null;
             
-            const sortedValues = [...values].sort((a, b) => a - b);
+            const validValues = values.filter(v => v !== null && v !== undefined && !isNaN(v));
+            if (validValues.length === 0) return null;
+            
+            const sortedValues = [...validValues].sort((a, b) => a - b);
             const middle = Math.floor(sortedValues.length / 2);
             
             if (sortedValues.length % 2 === 0) {
@@ -1415,7 +1418,7 @@
 
         // Форматирование числа с разделителями
         function formatNumber(num, decimals = 0) {
-            if (num === null || num === undefined) return '0';
+            if (num === null || num === undefined || isNaN(num)) return '0';
             return num.toLocaleString('ru-RU', {
                 minimumFractionDigits: decimals,
                 maximumFractionDigits: decimals
@@ -1424,7 +1427,7 @@
 
         // Форматирование суммы денег
         function formatCurrency(num) {
-            if (num === null || num === undefined) return '0 ₽';
+            if (num === null || num === undefined || isNaN(num)) return '0 ₽';
             
             if (Math.abs(num) >= 1000000000) {
                 return (num / 1000000000).toFixed(2) + ' млрд ₽';
@@ -1437,18 +1440,15 @@
             }
         }
 
-        // Форматирование процента падения цены
+        // Форматирование процента падения цены (БЕЗ ЗНАКА +)
         function formatPriceDrop(percent) {
-            if (percent === null || percent === undefined || percent === 0) return '0%';
+            if (percent === null || percent === undefined || isNaN(percent)) return 'нет данных';
             
             // Округляем до 1 знака после запятой
             const rounded = Math.round(percent * 10) / 10;
             
-            // Добавляем знак + для положительных значений (падение цены)
-            const sign = rounded > 0 ? '+' : '';
-            
-            // Если падение отрицательное (цена выросла), показываем как есть
-            return `${sign}${formatNumber(rounded, 1)}%`;
+            // ВОЗВРАЩАЕМ БЕЗ ЗНАКА +
+            return `${formatNumber(rounded, 1)}%`;
         }
 
         // Получение названия категории типа закупки
@@ -1475,6 +1475,7 @@
 
         // Получение класса CSS для индикатора падения цены
         function getPriceDropClass(percent) {
+            if (percent === null || percent === undefined || isNaN(percent) || percent === 0) return '';
             if (percent > 0) return 'drop-indicator positive'; // Падение цены (хорошо для заказчика)
             if (percent < 0) return 'drop-indicator'; // Рост цены (плохо)
             return '';
@@ -1628,6 +1629,11 @@
                 const typeClass = getProcurementTypeClass(typeCat);
                 const priceDropClass = getPriceDropClass(data.medianPriceDrop);
                 
+                // Определяем, есть ли данные
+                const hasNmccData = data.sum > 0 && data.medianNmcc > 0;
+                const hasBidData = data.tendersWithBids > 0 && data.medianBids > 0;
+                const hasPriceDropData = data.tendersWithPriceDrop > 0;
+                
                 tableHTML += `
                     <tr class="type-row">
                         <td>
@@ -1635,22 +1641,24 @@
                         </td>
                         <td>${selectedYear === 'all' ? 'Весь период' : selectedYear}</td>
                         <td class="number-cell">${formatNumber(data.count)}</td>
-                        <td class="number-cell">${formatCurrency(data.sum)}</td>
-                        <td class="number-cell">${formatCurrency(data.medianNmcc)}</td>
-                        <td class="number-cell ${priceDropClass}">${formatPriceDrop(data.medianPriceDrop)}</td>
-                        <td class="number-cell">${formatNumber(data.medianBids, 1)}</td>
-                        <td class="number-cell">${formatNumber(data.tendersWithBids)}</td>
+                        <td class="number-cell">${hasNmccData ? formatCurrency(data.sum) : 'нет данных'}</td>
+                        <td class="number-cell">${hasNmccData ? formatCurrency(data.medianNmcc) : 'нет данных'}</td>
+                        <td class="number-cell ${priceDropClass}">${hasPriceDropData ? formatPriceDrop(data.medianPriceDrop) : 'нет данных'}</td>
+                        <td class="number-cell">${hasBidData ? formatNumber(data.medianBids, 1) : 'нет данных'}</td>
+                        <td class="number-cell">${hasBidData ? formatNumber(data.tendersWithBids) : 'нет данных'}</td>
                     </tr>
                 `;
                 
                 // Обновляем итоговую строку
                 totalRow.count += data.count;
-                totalRow.sum += data.sum;
+                if (hasNmccData) {
+                    totalRow.sum += data.sum;
+                }
                 totalRow.tendersWithBids += data.tendersWithBids;
                 totalRow.tendersWithPriceDrop += data.tendersWithPriceDrop;
             });
             
-            // Вычисляем общие медианы
+            // Вычисляем общие медианы (только по данным, которые есть)
             const allNmccValues = [];
             const allBidValues = [];
             const allPriceDropValues = [];
@@ -1660,9 +1668,9 @@
                 if (!data) return;
                 
                 if (selectedType === 'all' || selectedType === typeCat) {
-                    allNmccValues.push(...data.nmccValues);
-                    allBidValues.push(...data.bidValues);
-                    allPriceDropValues.push(...data.priceDropValues);
+                    if (data.nmccValues.length > 0) allNmccValues.push(...data.nmccValues);
+                    if (data.bidValues.length > 0) allBidValues.push(...data.bidValues);
+                    if (data.priceDropValues.length > 0) allPriceDropValues.push(...data.priceDropValues);
                 }
             });
             
@@ -1670,19 +1678,23 @@
             totalRow.medianBids = calculateMedian(allBidValues);
             totalRow.medianPriceDrop = calculateMedian(allPriceDropValues);
             
-            // Добавляем итоговую строку
+            // Определяем, есть ли данные в итоговой строке
+            const totalHasNmccData = totalRow.sum > 0 && totalRow.medianNmcc > 0;
+            const totalHasBidData = totalRow.tendersWithBids > 0 && totalRow.medianBids > 0;
+            const totalHasPriceDropData = totalRow.tendersWithPriceDrop > 0;
             const totalPriceDropClass = getPriceDropClass(totalRow.medianPriceDrop);
             
+            // Добавляем итоговую строку
             tableHTML += `
                 <tr class="total-row">
                     <td><strong>Итого</strong></td>
                     <td></td>
                     <td class="number-cell"><strong>${formatNumber(totalRow.count)}</strong></td>
-                    <td class="number-cell"><strong>${formatCurrency(totalRow.sum)}</strong></td>
-                    <td class="number-cell"><strong>${formatCurrency(totalRow.medianNmcc)}</strong></td>
-                    <td class="number-cell ${totalPriceDropClass}"><strong>${formatPriceDrop(totalRow.medianPriceDrop)}</strong></td>
-                    <td class="number-cell"><strong>${formatNumber(totalRow.medianBids, 1)}</strong></td>
-                    <td class="number-cell"><strong>${formatNumber(totalRow.tendersWithBids)}</strong></td>
+                    <td class="number-cell"><strong>${totalHasNmccData ? formatCurrency(totalRow.sum) : 'нет данных'}</strong></td>
+                    <td class="number-cell"><strong>${totalHasNmccData ? formatCurrency(totalRow.medianNmcc) : 'нет данных'}</strong></td>
+                    <td class="number-cell ${totalPriceDropClass}"><strong>${totalHasPriceDropData ? formatPriceDrop(totalRow.medianPriceDrop) : 'нет данных'}</strong></td>
+                    <td class="number-cell"><strong>${totalHasBidData ? formatNumber(totalRow.medianBids, 1) : 'нет данных'}</strong></td>
+                    <td class="number-cell"><strong>${totalHasBidData ? formatNumber(totalRow.tendersWithBids) : 'нет данных'}</strong></td>
                 </tr>
             `;
             
@@ -1738,6 +1750,11 @@
                 const typeClass = getProcurementTypeClass(item.typeCategory);
                 const priceDropClass = getPriceDropClass(item.medianPriceDrop);
                 
+                // Определяем, есть ли данные
+                const hasNmccData = item.sum > 0 && item.medianNmcc > 0;
+                const hasBidData = item.bidValues && item.bidValues.length > 0 && item.medianBids > 0;
+                const hasPriceDropData = item.priceDropValues && item.priceDropValues.length > 0;
+                
                 tableHTML += `
                     <tr>
                         <td>${item.year}</td>
@@ -1749,10 +1766,10 @@
                         </td>
                         <td>${item.method}</td>
                         <td class="number-cell">${formatNumber(item.count)}</td>
-                        <td class="number-cell">${formatCurrency(item.sum)}</td>
-                        <td class="number-cell">${formatCurrency(item.medianNmcc)}</td>
-                        <td class="number-cell ${priceDropClass}">${formatPriceDrop(item.medianPriceDrop)}</td>
-                        <td class="number-cell">${formatNumber(item.medianBids, 1)}</td>
+                        <td class="number-cell">${hasNmccData ? formatCurrency(item.sum) : 'нет данных'}</td>
+                        <td class="number-cell">${hasNmccData ? formatCurrency(item.medianNmcc) : 'нет данных'}</td>
+                        <td class="number-cell ${priceDropClass}">${hasPriceDropData ? formatPriceDrop(item.medianPriceDrop) : 'нет данных'}</td>
+                        <td class="number-cell">${hasBidData ? formatNumber(item.medianBids, 1) : 'нет данных'}</td>
                     </tr>
                 `;
             });
@@ -1804,14 +1821,14 @@
                 const priceDropValues = years.map(year => {
                     const yearData = procurementData.summary[year];
                     if (!yearData || !yearData[typeCat]) return 0;
-                    return yearData[typeCat].medianPriceDrop;
+                    return yearData[typeCat].medianPriceDrop || 0;
                 });
                 
                 // Данные для заявок
                 const bidsValues = years.map(year => {
                     const yearData = procurementData.summary[year];
                     if (!yearData || !yearData[typeCat]) return 0;
-                    return yearData[typeCat].medianBids;
+                    return yearData[typeCat].medianBids || 0;
                 });
                 
                 // Добавляем набор данных для НМЦК
@@ -2286,16 +2303,21 @@
                 const typeClass = `type-${typeCat}`;
                 const priceDropClass = data.medianPriceDrop > 0 ? 'positive' : data.medianPriceDrop < 0 ? 'negative' : '';
                 
+                // Определяем, есть ли данные
+                const hasNmccData = data.sum > 0 && data.medianNmcc > 0;
+                const hasBidData = data.tendersWithBids > 0 && data.medianBids > 0;
+                const hasPriceDropData = data.tendersWithPriceDrop > 0;
+                
                 html += `
                     <tr>
                         <td><span class="type-tag ${typeClass}">${typeName}</span></td>
                         <td>Весь период</td>
                         <td class="number-cell">${formatNumber(data.count)}</td>
-                        <td class="number-cell">${formatCurrency(data.sum)}</td>
-                        <td class="number-cell">${formatCurrency(data.medianNmcc)}</td>
-                        <td class="number-cell ${priceDropClass}">${formatPriceDrop(data.medianPriceDrop)}</td>
-                        <td class="number-cell">${formatNumber(data.medianBids, 1)}</td>
-                        <td class="number-cell">${formatNumber(data.tendersWithBids)}</td>
+                        <td class="number-cell">${hasNmccData ? formatCurrency(data.sum) : 'нет данных'}</td>
+                        <td class="number-cell">${hasNmccData ? formatCurrency(data.medianNmcc) : 'нет данных'}</td>
+                        <td class="number-cell ${priceDropClass}">${hasPriceDropData ? formatPriceDrop(data.medianPriceDrop) : 'нет данных'}</td>
+                        <td class="number-cell">${hasBidData ? formatNumber(data.medianBids, 1) : 'нет данных'}</td>
+                        <td class="number-cell">${hasBidData ? formatNumber(data.tendersWithBids) : 'нет данных'}</td>
                     </tr>`;
             });
             
@@ -2306,6 +2328,7 @@
             let totalCount = 0;
             let totalSum = 0;
             let totalTendersWithBids = 0;
+            let totalTendersWithPriceDrop = 0;
             
             typeOrder.forEach(typeCat => {
                 const data = yearData[typeCat];
@@ -2314,6 +2337,7 @@
                 totalCount += data.count;
                 totalSum += data.sum;
                 totalTendersWithBids += data.tendersWithBids;
+                totalTendersWithPriceDrop += data.tendersWithPriceDrop;
                 allNmccValues.push(...data.nmccValues);
                 allBidValues.push(...data.bidValues);
                 allPriceDropValues.push(...data.priceDropValues);
@@ -2324,16 +2348,21 @@
             const totalMedianPriceDrop = calculateMedian(allPriceDropValues);
             const totalPriceDropClass = totalMedianPriceDrop > 0 ? 'positive' : totalMedianPriceDrop < 0 ? 'negative' : '';
             
+            // Определяем, есть ли данные в итоговой строке
+            const totalHasNmccData = totalSum > 0 && totalMedianNmcc > 0;
+            const totalHasBidData = totalTendersWithBids > 0 && totalMedianBids > 0;
+            const totalHasPriceDropData = totalTendersWithPriceDrop > 0;
+            
             html += `
                 <tr class="total-row">
                     <td><strong>Итого</strong></td>
                     <td></td>
                     <td class="number-cell"><strong>${formatNumber(totalCount)}</strong></td>
-                    <td class="number-cell"><strong>${formatCurrency(totalSum)}</strong></td>
-                    <td class="number-cell"><strong>${formatCurrency(totalMedianNmcc)}</strong></td>
-                    <td class="number-cell ${totalPriceDropClass}"><strong>${formatPriceDrop(totalMedianPriceDrop)}</strong></td>
-                    <td class="number-cell"><strong>${formatNumber(totalMedianBids, 1)}</strong></td>
-                    <td class="number-cell"><strong>${formatNumber(totalTendersWithBids)}</strong></td>
+                    <td class="number-cell"><strong>${totalHasNmccData ? formatCurrency(totalSum) : 'нет данных'}</strong></td>
+                    <td class="number-cell"><strong>${totalHasNmccData ? formatCurrency(totalMedianNmcc) : 'нет данных'}</strong></td>
+                    <td class="number-cell ${totalPriceDropClass}"><strong>${totalHasPriceDropData ? formatPriceDrop(totalMedianPriceDrop) : 'нет данных'}</strong></td>
+                    <td class="number-cell"><strong>${totalHasBidData ? formatNumber(totalMedianBids, 1) : 'нет данных'}</strong></td>
+                    <td class="number-cell"><strong>${totalHasBidData ? formatNumber(totalTendersWithBids) : 'нет данных'}</strong></td>
                 </tr>`;
             
             html += '</tbody></table>';
@@ -2378,6 +2407,11 @@
                     const typeClass = `type-${item.typeCategory}`;
                     const priceDropClass = item.medianPriceDrop > 0 ? 'positive' : item.medianPriceDrop < 0 ? 'negative' : '';
                     
+                    // Определяем, есть ли данные
+                    const hasNmccData = item.sum > 0 && item.medianNmcc > 0;
+                    const hasBidData = item.bidValues && item.bidValues.length > 0 && item.medianBids > 0;
+                    const hasPriceDropData = item.priceDropValues && item.priceDropValues.length > 0;
+                    
                     html += `
                         <tr>
                             <td>${item.year}</td>
@@ -2387,10 +2421,10 @@
                             </td>
                             <td>${item.method}</td>
                             <td class="number-cell">${formatNumber(item.count)}</td>
-                            <td class="number-cell">${formatCurrency(item.sum)}</td>
-                            <td class="number-cell">${formatCurrency(item.medianNmcc)}</td>
-                            <td class="number-cell ${priceDropClass}">${formatPriceDrop(item.medianPriceDrop)}</td>
-                            <td class="number-cell">${formatNumber(item.medianBids, 1)}</td>
+                            <td class="number-cell">${hasNmccData ? formatCurrency(item.sum) : 'нет данных'}</td>
+                            <td class="number-cell">${hasNmccData ? formatCurrency(item.medianNmcc) : 'нет данных'}</td>
+                            <td class="number-cell ${priceDropClass}">${hasPriceDropData ? formatPriceDrop(item.medianPriceDrop) : 'нет данных'}</td>
+                            <td class="number-cell">${hasBidData ? formatNumber(item.medianBids, 1) : 'нет данных'}</td>
                         </tr>`;
                 });
             });
@@ -2410,7 +2444,7 @@
                 if (!data) return;
                 
                 const typeName = getProcurementTypeName(typeCat);
-                listItems += `<li>${typeName}: ${formatNumber(data.count)} тендеров (${formatCurrency(data.sum)})</li>`;
+                listItems += `<li>${typeName}: ${formatNumber(data.count)} тендеров (${data.sum > 0 ? formatCurrency(data.sum) : 'нет данных'})</li>`;
             });
             
             return listItems;
