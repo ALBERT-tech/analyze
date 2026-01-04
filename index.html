@@ -1,0 +1,2563 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Анализатор тендеров с динамикой по годам</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --color-primary: #218085;
+            --color-primary-dark: #1a686c;
+            --color-background: #fcfcf9;
+            --color-surface: #fffff5;
+            --color-text: #133C3B;
+            --color-text-secondary: #626C71;
+            --color-success: #22C55E;
+            --color-error: #C0152F;
+            --color-warning: #A84B2F;
+            --color-info: #3b82f6;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.12);
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
+            --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1);
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+
+        body {
+            background-color: var(--color-background);
+            color: var(--color-text);
+            line-height: 1.6;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-top: 20px;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            margin-bottom: 8px;
+            color: var(--color-primary);
+        }
+
+        .subtitle {
+            color: var(--color-text-secondary);
+            font-size: 16px;
+        }
+
+        .upload-section {
+            margin-bottom: 40px;
+        }
+
+        .upload-zone {
+            border: 2px dashed #ccc;
+            border-radius: var(--radius-md);
+            padding: 40px 24px;
+            text-align: center;
+            background-color: var(--color-surface);
+            transition: all 0.25s ease;
+            cursor: pointer;
+            margin-bottom: 24px;
+        }
+
+        .upload-zone:hover {
+            border-color: var(--color-primary);
+            background-color: rgba(33, 128, 133, 0.05);
+        }
+
+        .upload-zone.dragover {
+            border-color: var(--color-primary);
+            background-color: rgba(33, 128, 133, 0.1);
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            color: var(--color-primary);
+            margin-bottom: 16px;
+        }
+
+        .upload-text {
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+
+        .upload-subtext {
+            color: var(--color-text-secondary);
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .btn {
+            display: inline-block;
+            background-color: var(--color-primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: var(--radius-sm);
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            text-align: center;
+        }
+
+        .btn:hover {
+            background-color: var(--color-primary-dark);
+            box-shadow: var(--shadow-md);
+            transform: translateY(-1px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-reset {
+            background-color: transparent;
+            color: var(--color-text);
+            border: 1px solid #ccc;
+            margin-top: 20px;
+        }
+
+        .btn-reset:hover {
+            background-color: #f5f5f5;
+        }
+
+        .btn-export {
+            background-color: var(--color-success);
+            margin-left: 10px;
+        }
+
+        .btn-export:hover {
+            background-color: #1da750;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 40px 0;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(33, 128, 133, 0.2);
+            border-radius: 50%;
+            border-top-color: var(--color-primary);
+            animation: spin 0.6s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .results-section {
+            display: none;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .card {
+            background-color: white;
+            border-radius: var(--radius-md);
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow-sm);
+            border-left: 4px solid var(--color-primary);
+        }
+
+        .card-success {
+            border-left-color: var(--color-success);
+        }
+
+        .card-error {
+            border-left-color: var(--color-error);
+        }
+
+        .card-warning {
+            border-left-color: var(--color-warning);
+        }
+
+        .card-info {
+            border-left-color: var(--color-info);
+        }
+
+        .card-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--color-primary);
+        }
+
+        .period-range {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--color-text);
+        }
+
+        .period-days {
+            color: var(--color-text-secondary);
+            font-size: 16px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 24px;
+        }
+
+        .stat-item {
+            background-color: var(--color-surface);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: var(--color-text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--color-primary);
+        }
+
+        .error-message {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 20px;
+            border-radius: var(--radius-md);
+            background-color: rgba(192, 21, 47, 0.05);
+            border-left: 4px solid var(--color-error);
+        }
+
+        .error-icon {
+            color: var(--color-error);
+            font-size: 20px;
+            margin-top: 2px;
+        }
+
+        .error-text {
+            flex: 1;
+        }
+
+        .file-info {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 20px;
+            padding: 12px;
+            background-color: var(--color-surface);
+            border-radius: var(--radius-sm);
+        }
+
+        .file-name {
+            font-weight: 500;
+        }
+
+        .file-size {
+            color: var(--color-text-secondary);
+            font-size: 14px;
+        }
+
+        /* Стили для таблиц */
+        .stats-table-container {
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+
+        .stats-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        .stats-table th {
+            background-color: var(--color-primary);
+            color: white;
+            font-weight: 600;
+            text-align: left;
+            padding: 12px 16px;
+            position: sticky;
+            top: 0;
+        }
+
+        .stats-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .stats-table tr:hover {
+            background-color: rgba(33, 128, 133, 0.05);
+        }
+
+        .stats-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .stats-table .number-cell {
+            text-align: right;
+            font-family: 'Courier New', monospace;
+        }
+
+        .stats-table .total-row {
+            background-color: rgba(33, 128, 133, 0.1);
+            font-weight: 600;
+        }
+
+        .stats-table .year-row {
+            background-color: rgba(33, 128, 133, 0.05);
+            font-weight: 600;
+        }
+
+        .stats-table .type-row {
+            font-weight: 500;
+        }
+
+        .stats-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 24px;
+        }
+
+        .summary-item {
+            background-color: var(--color-surface);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+        }
+
+        .summary-label {
+            font-size: 14px;
+            color: var(--color-text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .summary-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--color-primary);
+        }
+
+        .stats-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .sort-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .sort-btn {
+            padding: 6px 12px;
+            background-color: #f0f0f0;
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        .sort-btn:hover {
+            background-color: #e0e0e0;
+        }
+
+        .sort-btn.active {
+            background-color: var(--color-primary);
+            color: white;
+        }
+
+        .filter-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .filter-select {
+            padding: 8px 12px;
+            border-radius: var(--radius-sm);
+            border: 1px solid #ccc;
+            background-color: white;
+            min-width: 150px;
+        }
+
+        /* Стили для чартов */
+        .chart-container {
+            margin-top: 30px;
+            height: 400px;
+            position: relative;
+        }
+
+        .chart-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--color-text);
+        }
+
+        .year-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .year-tab {
+            padding: 8px 16px;
+            background-color: #f0f0f0;
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .year-tab:hover {
+            background-color: #e0e0e0;
+        }
+
+        .year-tab.active {
+            background-color: var(--color-primary);
+            color: white;
+        }
+
+        .procurement-type-tag {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 8px;
+            margin-bottom: 4px;
+        }
+
+        .type-44 { background-color: rgba(34, 197, 94, 0.2); color: #166534; }
+        .type-223 { background-color: rgba(59, 130, 246, 0.2); color: #1e40af; }
+        .type-commercial { background-color: rgba(168, 75, 47, 0.2); color: #7c2d12; }
+        .type-other { background-color: rgba(156, 163, 175, 0.2); color: #374151; }
+
+        .drop-indicator {
+            color: #ef4444;
+            font-weight: 600;
+        }
+
+        .drop-indicator.positive {
+            color: #22c55e;
+        }
+
+        .export-section {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: var(--color-surface);
+            border-radius: var(--radius-md);
+            border: 1px dashed #ccc;
+        }
+
+        .export-options {
+            display: flex;
+            gap: 15px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .export-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 15px;
+            background-color: white;
+            border-radius: var(--radius-sm);
+            border: 1px solid #ddd;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .export-option:hover {
+            background-color: #f5f5f5;
+            border-color: var(--color-primary);
+        }
+
+        .export-option i {
+            color: var(--color-primary);
+            font-size: 18px;
+        }
+
+        .export-progress {
+            display: none;
+            margin-top: 15px;
+            text-align: center;
+            color: var(--color-text-secondary);
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 60px;
+            padding: 20px;
+            color: var(--color-text-secondary);
+            font-size: 14px;
+            border-top: 1px solid #eee;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 0 10px;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+            
+            .upload-zone {
+                padding: 30px 20px;
+            }
+            
+            .stats-grid, .stats-summary {
+                grid-template-columns: 1fr;
+            }
+            
+            .period-range {
+                font-size: 20px;
+            }
+            
+            .stats-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            
+            .chart-container {
+                height: 300px;
+            }
+            
+            .export-options {
+                flex-direction: column;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+            
+            .upload-zone {
+                padding: 24px 16px;
+            }
+            
+            .card {
+                padding: 20px;
+            }
+            
+            .stats-table th,
+            .stats-table td {
+                padding: 8px 12px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Анализатор тендеров с динамикой по годам</h1>
+            <p class="subtitle">Загрузите Excel-файл для анализа тендеров с укрупненной и детализированной статистикой по годам</p>
+        </header>
+        
+        <main>
+            <section class="upload-section">
+                <div class="upload-zone" id="uploadZone">
+                    <div class="upload-icon">
+                        <i class="fas fa-file-excel"></i>
+                    </div>
+                    <div class="upload-text">Перетащите файл Excel сюда</div>
+                    <div class="upload-subtext">или</div>
+                    <button class="btn" id="selectFileBtn">
+                        <i class="fas fa-folder-open"></i> Выбрать файл
+                    </button>
+                    <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls">
+                    <div class="upload-subtext" style="margin-top: 16px;">
+                        Поддерживаемые форматы: .xlsx, .xls
+                    </div>
+                </div>
+                
+                <div id="fileInfo" class="file-info" style="display: none;">
+                    <i class="fas fa-file-excel" style="color: var(--color-primary);"></i>
+                    <div>
+                        <div class="file-name" id="fileName"></div>
+                        <div class="file-size" id="fileSize"></div>
+                    </div>
+                </div>
+            </section>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <div>Обработка файла...</div>
+            </div>
+            
+            <section class="results-section" id="resultsSection">
+                <!-- Карточка с периодом тендеров -->
+                <div class="card card-success" id="resultCard">
+                    <h2 class="card-title">Период Тендеров</h2>
+                    <div class="period-range" id="periodRange"></div>
+                    <div class="period-days" id="periodDays"></div>
+                    
+                    <div class="stats-grid" id="statsGrid">
+                        <!-- Статистика будет вставлена здесь -->
+                    </div>
+                </div>
+                
+                <!-- Карточка с укрупненной статистикой по типам закупок -->
+                <div class="card card-info" id="summaryStatsCard" style="display: none;">
+                    <div class="stats-header">
+                        <h2 class="card-title">Укрупненная статистика по типам закупок</h2>
+                        <div class="year-tabs" id="yearTabs">
+                            <!-- Годы будут добавлены динамически -->
+                        </div>
+                    </div>
+                    
+                    <div class="filter-controls">
+                        <select id="procurementTypeFilter" class="filter-select">
+                            <option value="all">Все типы закупок</option>
+                            <option value="44">44-ФЗ</option>
+                            <option value="223">223-ФЗ</option>
+                            <option value="commercial">Коммерция</option>
+                            <option value="other">Прочие</option>
+                        </select>
+                    </div>
+                    
+                    <div class="stats-table-container">
+                        <table class="stats-table" id="summaryStatsTable">
+                            <thead>
+                                <tr>
+                                    <th>Тип закупки</th>
+                                    <th>Год</th>
+                                    <th>Кол-во тендеров</th>
+                                    <th>Сумма НМЦК</th>
+                                    <th>Медиана НМЦК</th>
+                                    <th>Медиана % падения цены</th>
+                                    <th>Медиана заявок</th>
+                                    <th>Тендеров с заявками</th>
+                                </tr>
+                            </thead>
+                            <tbody id="summaryStatsBody">
+                                <!-- Данные таблицы будут здесь -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Графики -->
+                    <div class="chart-container">
+                        <div class="chart-title">Динамика суммы НМЦК по годам</div>
+                        <canvas id="nmccChart"></canvas>
+                    </div>
+                    
+                    <div class="chart-container">
+                        <div class="chart-title">Динамика медианы % падения цены по годам</div>
+                        <canvas id="priceDropChart"></canvas>
+                    </div>
+                    
+                    <div class="chart-container">
+                        <div class="chart-title">Динамика медианы количества заявок по годам</div>
+                        <canvas id="bidsChart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Карточка с детализированной статистикой -->
+                <div class="card card-warning" id="detailedStatsCard" style="display: none;">
+                    <div class="stats-header">
+                        <h2 class="card-title">Детализированная статистика с разбивкой по годам</h2>
+                        <div class="sort-controls">
+                            <button class="sort-btn" data-sort="year-desc">По году ↓</button>
+                            <button class="sort-btn" data-sort="type-asc">По типу А-Я</button>
+                            <button class="sort-btn" data-sort="count-desc">По количеству ↓</button>
+                        </div>
+                    </div>
+                    
+                    <div class="filter-controls">
+                        <select id="detailedYearFilter" class="filter-select">
+                            <option value="all">Все годы</option>
+                            <!-- Годы будут добавлены динамически -->
+                        </select>
+                        <select id="detailedTypeFilter" class="filter-select">
+                            <option value="all">Все типы</option>
+                            <!-- Типы закупок будут добавлены динамически -->
+                        </select>
+                    </div>
+                    
+                    <div class="stats-table-container">
+                        <table class="stats-table" id="detailedStatsTable">
+                            <thead>
+                                <tr>
+                                    <th>Год</th>
+                                    <th>Тип закупки</th>
+                                    <th>Способ размещения</th>
+                                    <th>Кол-во тендеров</th>
+                                    <th>Сумма НМЦК</th>
+                                    <th>Медиана НМЦК</th>
+                                    <th>Медиана % падения</th>
+                                    <th>Медиана заявок</th>
+                                </tr>
+                            </thead>
+                            <tbody id="detailedStatsBody">
+                                <!-- Данные таблицы будут здесь -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Секция экспорта -->
+                <div class="export-section" id="exportSection" style="display: none;">
+                    <h3 class="card-title">Экспорт отчета</h3>
+                    <p>Вы можете скачать отчет в различных форматах:</p>
+                    
+                    <div class="export-options">
+                        <div class="export-option" id="exportWordBtn">
+                            <i class="fas fa-file-word"></i>
+                            <div>
+                                <div style="font-weight: 600;">Word (.docx)</div>
+                                <div style="font-size: 12px; color: var(--color-text-secondary);">
+                                    Форматированный отчет с таблицами и графиками
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="export-option" id="exportExcelBtn">
+                            <i class="fas fa-file-excel"></i>
+                            <div>
+                                <div style="font-weight: 600;">Excel</div>
+                                <div style="font-size: 12px; color: var(--color-text-secondary);">
+                                    Исходные данные и сводные таблицы
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="export-progress" id="exportProgress">
+                        <div class="spinner" style="width: 20px; height: 20px; display: inline-block; margin-right: 10px;"></div>
+                        <span id="exportProgressText">Подготовка отчета...</span>
+                    </div>
+                </div>
+                
+                <!-- Ошибки -->
+                <div class="error-message" id="errorCard" style="display: none;">
+                    <div class="error-icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="error-text" id="errorText"></div>
+                </div>
+                
+                <div style="text-align: center; margin-top: 30px;">
+                    <button class="btn btn-reset" id="resetBtn">
+                        <i class="fas fa-redo"></i> Загрузить другой файл
+                    </button>
+                </div>
+            </section>
+        </main>
+        
+        <footer>
+            <p>Приложение для анализа тендеров с динамикой по годам</p>
+            <p>Использует библиотеку <a href="https://sheetjs.com/" target="_blank" style="color: var(--color-primary);">SheetJS</a> для чтения Excel</p>
+        </footer>
+    </div>
+
+    <script>
+        // DOM элементы
+        const fileInput = document.getElementById('fileInput');
+        const uploadZone = document.getElementById('uploadZone');
+        const selectFileBtn = document.getElementById('selectFileBtn');
+        const loading = document.getElementById('loading');
+        const resultsSection = document.getElementById('resultsSection');
+        const resultCard = document.getElementById('resultCard');
+        const periodRange = document.getElementById('periodRange');
+        const periodDays = document.getElementById('periodDays');
+        const statsGrid = document.getElementById('statsGrid');
+        const errorCard = document.getElementById('errorCard');
+        const errorText = document.getElementById('errorText');
+        const resetBtn = document.getElementById('resetBtn');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const exportSection = document.getElementById('exportSection');
+        const exportProgress = document.getElementById('exportProgress');
+        const exportProgressText = document.getElementById('exportProgressText');
+        
+        // Элементы для статистики
+        const summaryStatsCard = document.getElementById('summaryStatsCard');
+        const summaryStatsBody = document.getElementById('summaryStatsBody');
+        const detailedStatsCard = document.getElementById('detailedStatsCard');
+        const detailedStatsBody = document.getElementById('detailedStatsBody');
+        const yearTabs = document.getElementById('yearTabs');
+        const procurementTypeFilter = document.getElementById('procurementTypeFilter');
+        const detailedYearFilter = document.getElementById('detailedYearFilter');
+        const detailedTypeFilter = document.getElementById('detailedTypeFilter');
+        
+        // Элементы для экспорта
+        const exportWordBtn = document.getElementById('exportWordBtn');
+        const exportExcelBtn = document.getElementById('exportExcelBtn');
+        
+        // ЖЕСТКО ФИКСИРОВАННЫЕ ИНДЕКСЫ СТОЛБЦОВ
+        const COLUMN_INDEXES = {
+            DATE_PUBLICATION: 21,    // Столбец V (22-й, т.к. A=0)
+            PROCUREMENT_TYPE: 18,    // Столбец S (19-й)
+            PROCUREMENT_METHOD: 19,  // Столбец T (20-й)
+            NMCC: 5,                 // Столбец F (6-й)
+            BID_COUNT: 28,           // Столбец AC (29-й)
+            WINNING_PRICE: 35        // Столбец AJ (36-й)
+        };
+        
+        // Ключевые слова для классификации типов закупок
+        const PROCUREMENT_TYPE_CATEGORIES = {
+            '44': ['44-фз', '44 фз', '44фз', '44 фз', 'федеральный закон 44', 'закон 44'],
+            '223': ['223-фз', '223 фз', '223фз', '223 фз', 'федеральный закон 223', 'закон 223'],
+            'commercial': ['коммерческ', 'коммерция', 'коммерч', 'комм', 'нерегулируемые', 'коммерческие']
+        };
+        
+        // Переменные для данных
+        let procurementData = {
+            summary: {}, // Укрупненная статистика по типам и годам
+            detailed: [], // Детализированная статистика
+            years: [], // Список лет
+            types: [], // Список типов закупок
+            methods: [], // Список способов размещения
+            fileName: '', // Имя загруженного файла
+            analysisDate: '' // Дата анализа
+        };
+        
+        let currentYear = 'all';
+        let currentSort = 'year-desc';
+        let charts = {};
+
+        // Обработчик выбора файла
+        function handleFileSelect(e) {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        }
+
+        // Обработчики событий
+        selectFileBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        uploadZone.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', handleFileSelect);
+
+        // Drag and Drop обработчики
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            
+            if (e.dataTransfer.files.length > 0) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        resetBtn.addEventListener('click', resetForm);
+        
+        // Обработчики фильтров
+        procurementTypeFilter.addEventListener('change', () => {
+            renderSummaryStats();
+        });
+        
+        detailedYearFilter.addEventListener('change', () => {
+            renderDetailedStats();
+        });
+        
+        detailedTypeFilter.addEventListener('change', () => {
+            renderDetailedStats();
+        });
+        
+        // Обработчики сортировки
+        document.querySelectorAll('.sort-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                currentSort = this.dataset.sort;
+                sortDetailedStats();
+                renderDetailedStats();
+            });
+        });
+
+        // Обработчики экспорта
+        exportWordBtn.addEventListener('click', exportToWord);
+        exportExcelBtn.addEventListener('click', exportToExcel);
+
+        // Основная функция обработки файла
+        function handleFile(file) {
+            console.log('Файл загружен:', file.name);
+            
+            // Сохраняем имя файла и дату анализа
+            procurementData.fileName = file.name;
+            procurementData.analysisDate = new Date().toLocaleString('ru-RU');
+            
+            // Показываем информацию о файле
+            showFileInfo(file);
+            
+            // Показываем индикатор загрузки
+            loading.style.display = 'block';
+            resultsSection.style.display = 'none';
+            errorCard.style.display = 'none';
+            summaryStatsCard.style.display = 'none';
+            detailedStatsCard.style.display = 'none';
+            exportSection.style.display = 'none';
+            
+            // Очищаем предыдущие данные
+            procurementData = {
+                ...procurementData,
+                summary: {},
+                detailed: [],
+                years: [],
+                types: [],
+                methods: []
+            };
+            
+            // Чтение файла
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    
+                    // Берем первый лист
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    
+                    // Конвертируем в JSON
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    
+                    console.log('Данные загружены, строк:', jsonData.length);
+                    
+                    // Обрабатываем данные
+                    processExcelData(jsonData);
+                } catch (error) {
+                    console.error('Ошибка при чтении файла:', error);
+                    showError('Ошибка при чтении файла. Убедитесь, что файл является корректным Excel-файлом.');
+                }
+            };
+            
+            reader.onerror = function() {
+                showError('Ошибка при чтении файла. Пожалуйста, попробуйте снова.');
+            };
+            
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Обработка данных Excel
+        function processExcelData(data) {
+            // Проверяем, есть ли данные
+            if (!data || data.length < 2) {
+                showError('Файл не содержит данных или содержит только заголовки.');
+                return;
+            }
+            
+            const headers = data[0];
+            const rows = data.slice(1);
+            
+            console.log('Все заголовки:', headers);
+            console.log('Количество столбцов:', headers.length);
+            
+            // Проверяем, что файл имеет достаточно столбцов
+            if (headers.length < 36) { // AJ - 36-й столбец, значит нужно хотя бы 36 столбцов
+                showError(`Файл имеет только ${headers.length} столбцов, а требуется минимум 36. Проверьте структуру файла.`);
+                return;
+            }
+            
+            // Используем жестко заданные индексы столбцов
+            const dateColumnIndex = COLUMN_INDEXES.DATE_PUBLICATION;
+            const typeColumnIndex = COLUMN_INDEXES.PROCUREMENT_TYPE;
+            const methodColumnIndex = COLUMN_INDEXES.PROCUREMENT_METHOD;
+            const nmccColumnIndex = COLUMN_INDEXES.NMCC;
+            const bidCountColumnIndex = COLUMN_INDEXES.BID_COUNT;
+            const winningPriceColumnIndex = COLUMN_INDEXES.WINNING_PRICE;
+            
+            // Логируем, какие столбцы используем
+            console.log('Используемые столбцы:', {
+                date: {index: dateColumnIndex, name: headers[dateColumnIndex] || 'нет'},
+                type: {index: typeColumnIndex, name: headers[typeColumnIndex] || 'нет'},
+                method: {index: methodColumnIndex, name: headers[methodColumnIndex] || 'нет'},
+                nmcc: {index: nmccColumnIndex, name: headers[nmccColumnIndex] || 'нет'},
+                bids: {index: bidCountColumnIndex, name: headers[bidCountColumnIndex] || 'нет'},
+                winningPrice: {index: winningPriceColumnIndex, name: headers[winningPriceColumnIndex] || 'нет'}
+            });
+            
+            // Проверяем названия столбцов (для отладки)
+            if (headers[dateColumnIndex] !== 'Дата публикации (МСК)') {
+                console.warn(`Внимание: ожидался столбец "Дата публикации (МСК)", а найден: "${headers[dateColumnIndex]}"`);
+            }
+            if (headers[nmccColumnIndex] !== 'Начальная цена, руб') {
+                console.warn(`Внимание: ожидался столбец "Начальная цена, руб", а найден: "${headers[nmccColumnIndex]}"`);
+            }
+            
+            // Извлекаем даты
+            const dates = extractDates(rows, dateColumnIndex);
+            
+            if (dates.length === 0) {
+                showError(`Не удалось извлечь ни одной валидной даты. Проверьте формат дат в столбце V.`);
+                return;
+            }
+            
+            console.log('Валидных дат найдено:', dates.length);
+            
+            // Находим минимальную и максимальную даты
+            const minDate = new Date(Math.min(...dates));
+            const maxDate = new Date(Math.max(...dates));
+            
+            console.log('Диапазон:', minDate.toISOString(), '-', maxDate.toISOString());
+            
+            // Вычисляем статистику
+            const totalTenders = rows.length;
+            const validDates = dates.length;
+            const daysDiff = Math.floor((maxDate - minDate) / (1000 * 60 * 60 * 24)) + 1;
+            const monthsDiff = Math.round(daysDiff / 30 * 10) / 10;
+            
+            // Анализируем данные
+            const analysisResult = analyzeData(rows, dateColumnIndex, typeColumnIndex, 
+                methodColumnIndex, nmccColumnIndex, bidCountColumnIndex, winningPriceColumnIndex);
+            
+            // Показываем результаты
+            displayResults(minDate, maxDate, daysDiff, monthsDiff, totalTenders, 
+                validDates, analysisResult);
+        }
+
+        // Извлечение дат из столбца
+        function extractDates(rows, columnIndex) {
+            const dates = [];
+            
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                const value = row[columnIndex];
+                
+                if (value === undefined || value === null || value === '') {
+                    continue;
+                }
+                
+                const parsedDate = parseDate(value);
+                
+                if (parsedDate) {
+                    // Проверяем диапазон года (2000-2030)
+                    const year = parsedDate.getFullYear();
+                    if (year >= 2000 && year <= 2030) {
+                        dates.push(parsedDate.getTime());
+                    }
+                }
+            }
+            
+            return dates;
+        }
+
+        // Анализ данных
+        function analyzeData(rows, dateColIndex, typeColIndex, methodColIndex, nmccColIndex, bidColIndex, winningPriceColIndex) {
+            const summary = {};
+            const detailed = [];
+            const yearsSet = new Set();
+            const typesSet = new Set();
+            const methodsSet = new Set();
+            
+            // Инициализируем структуру для сводной статистики
+            const initSummaryItem = () => ({
+                count: 0,
+                sum: 0,
+                nmccValues: [],
+                bidValues: [],
+                priceDropValues: [], // Проценты падения цены
+                tendersWithBids: 0,
+                tendersWithPriceDrop: 0 // Тендеры с данными о падении цены
+            });
+            
+            // Обрабатываем каждую строку
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                
+                // Извлекаем значения
+                const dateValue = row[dateColIndex];
+                const typeValue = typeColIndex !== -1 ? row[typeColIndex] : null;
+                const methodValue = methodColIndex !== -1 ? row[methodColIndex] : null;
+                const nmccValue = nmccColIndex !== -1 ? row[nmccColIndex] : null;
+                const bidValue = bidColIndex !== -1 ? row[bidColIndex] : null;
+                const winningPriceValue = winningPriceColIndex !== -1 ? row[winningPriceColIndex] : null;
+                
+                // Парсим дату
+                const date = parseDate(dateValue);
+                if (!date) continue;
+                
+                const year = date.getFullYear();
+                yearsSet.add(year);
+                
+                // Определяем категорию типа закупки
+                let typeCategory = 'other';
+                let originalType = typeValue ? typeValue.toString().trim() : 'Не указан';
+                
+                if (originalType) {
+                    typesSet.add(originalType);
+                    const lowerType = originalType.toLowerCase();
+                    
+                    // Классифицируем тип закупки
+                    if (PROCUREMENT_TYPE_CATEGORIES['44'].some(keyword => lowerType.includes(keyword))) {
+                        typeCategory = '44';
+                    } else if (PROCUREMENT_TYPE_CATEGORIES['223'].some(keyword => lowerType.includes(keyword))) {
+                        typeCategory = '223';
+                    } else if (PROCUREMENT_TYPE_CATEGORIES['commercial'].some(keyword => lowerType.includes(keyword))) {
+                        typeCategory = 'commercial';
+                    }
+                }
+                
+                // Обрабатываем способ размещения
+                const method = methodValue ? methodValue.toString().trim() : 'Не указан';
+                if (method) methodsSet.add(method);
+                
+                // Парсим НМЦК
+                let nmcc = 0;
+                let hasNmcc = false;
+                
+                if (nmccValue !== undefined && nmccValue !== null && nmccValue !== '') {
+                    nmcc = parseFloat(nmccValue.toString().replace(/\s/g, '').replace(',', '.'));
+                    if (!isNaN(nmcc) && isFinite(nmcc) && nmcc >= 0) {
+                        hasNmcc = true;
+                    }
+                }
+                
+                // Парсим количество заявок
+                let bidCount = 0;
+                let hasBidCount = false;
+                
+                if (bidValue !== undefined && bidValue !== null && bidValue !== '') {
+                    bidCount = parseFloat(bidValue.toString().replace(/\s/g, '').replace(',', '.'));
+                    if (!isNaN(bidCount) && isFinite(bidCount) && bidCount >= 0) {
+                        hasBidCount = true;
+                    }
+                }
+                
+                // Парсим цену победителя и вычисляем % падения
+                let priceDropPercent = null;
+                let hasPriceDrop = false;
+                
+                if (winningPriceValue !== undefined && winningPriceValue !== null && winningPriceValue !== '' && 
+                    nmccValue !== undefined && nmccValue !== null && nmccValue !== '') {
+                    
+                    const winningPrice = parseFloat(winningPriceValue.toString().replace(/\s/g, '').replace(',', '.'));
+                    
+                    if (!isNaN(winningPrice) && isFinite(winningPrice) && winningPrice >= 0 &&
+                        !isNaN(nmcc) && isFinite(nmcc) && nmcc > 0) {
+                        
+                        // Вычисляем % падения цены: (1 - цена победителя / НМЦК) * 100%
+                        priceDropPercent = (1 - (winningPrice / nmcc)) * 100;
+                        hasPriceDrop = true;
+                        
+                        // Ограничиваем значения от -100% до 100% (на случай некорректных данных)
+                        if (priceDropPercent < -100) priceDropPercent = -100;
+                        if (priceDropPercent > 100) priceDropPercent = 100;
+                    }
+                }
+                
+                // Обновляем сводную статистику
+                // Для всего периода
+                if (!summary['all']) summary['all'] = {};
+                if (!summary['all'][typeCategory]) {
+                    summary['all'][typeCategory] = initSummaryItem();
+                }
+                
+                summary['all'][typeCategory].count++;
+                if (hasNmcc) {
+                    summary['all'][typeCategory].sum += nmcc;
+                    summary['all'][typeCategory].nmccValues.push(nmcc);
+                }
+                if (hasBidCount) {
+                    summary['all'][typeCategory].bidValues.push(bidCount);
+                    summary['all'][typeCategory].tendersWithBids++;
+                }
+                if (hasPriceDrop) {
+                    summary['all'][typeCategory].priceDropValues.push(priceDropPercent);
+                    summary['all'][typeCategory].tendersWithPriceDrop++;
+                }
+                
+                // Для конкретного года
+                if (!summary[year]) summary[year] = {};
+                if (!summary[year][typeCategory]) {
+                    summary[year][typeCategory] = initSummaryItem();
+                }
+                
+                summary[year][typeCategory].count++;
+                if (hasNmcc) {
+                    summary[year][typeCategory].sum += nmcc;
+                    summary[year][typeCategory].nmccValues.push(nmcc);
+                }
+                if (hasBidCount) {
+                    summary[year][typeCategory].bidValues.push(bidCount);
+                    summary[year][typeCategory].tendersWithBids++;
+                }
+                if (hasPriceDrop) {
+                    summary[year][typeCategory].priceDropValues.push(priceDropPercent);
+                    summary[year][typeCategory].tendersWithPriceDrop++;
+                }
+                
+                // Добавляем детализированную запись
+                detailed.push({
+                    year: year,
+                    type: originalType,
+                    typeCategory: typeCategory,
+                    method: method,
+                    nmcc: hasNmcc ? nmcc : null,
+                    bidCount: hasBidCount ? bidCount : null,
+                    priceDropPercent: hasPriceDrop ? priceDropPercent : null
+                });
+            }
+            
+            // Вычисляем медианы для сводной статистики
+            Object.keys(summary).forEach(yearKey => {
+                Object.keys(summary[yearKey]).forEach(typeCat => {
+                    const item = summary[yearKey][typeCat];
+                    item.medianNmcc = calculateMedian(item.nmccValues);
+                    item.medianBids = calculateMedian(item.bidValues);
+                    item.medianPriceDrop = calculateMedian(item.priceDropValues);
+                });
+            });
+            
+            // Группируем детализированные данные
+            const detailedGrouped = groupDetailedData(detailed);
+            
+            return {
+                summary: summary,
+                detailed: detailedGrouped,
+                years: Array.from(yearsSet).sort((a, b) => a - b),
+                types: Array.from(typesSet).sort(),
+                methods: Array.from(methodsSet).sort()
+            };
+        }
+
+        // Группировка детализированных данных
+        function groupDetailedData(detailed) {
+            const grouped = {};
+            
+            detailed.forEach(item => {
+                const key = `${item.year}|${item.type}|${item.method}`;
+                
+                if (!grouped[key]) {
+                    grouped[key] = {
+                        year: item.year,
+                        type: item.type,
+                        typeCategory: item.typeCategory,
+                        method: item.method,
+                        count: 0,
+                        sum: 0,
+                        nmccValues: [],
+                        bidValues: [],
+                        priceDropValues: []
+                    };
+                }
+                
+                grouped[key].count++;
+                if (item.nmcc !== null) {
+                    grouped[key].sum += item.nmcc;
+                    grouped[key].nmccValues.push(item.nmcc);
+                }
+                if (item.bidCount !== null) {
+                    grouped[key].bidValues.push(item.bidCount);
+                }
+                if (item.priceDropPercent !== null) {
+                    grouped[key].priceDropValues.push(item.priceDropPercent);
+                }
+            });
+            
+            // Вычисляем медианы
+            Object.keys(grouped).forEach(key => {
+                const item = grouped[key];
+                item.medianNmcc = calculateMedian(item.nmccValues);
+                item.medianBids = calculateMedian(item.bidValues);
+                item.medianPriceDrop = calculateMedian(item.priceDropValues);
+            });
+            
+            return Object.values(grouped);
+        }
+
+        // Функция для вычисления медианы
+        function calculateMedian(values) {
+            if (!values || values.length === 0) return 0;
+            
+            const sortedValues = [...values].sort((a, b) => a - b);
+            const middle = Math.floor(sortedValues.length / 2);
+            
+            if (sortedValues.length % 2 === 0) {
+                return (sortedValues[middle - 1] + sortedValues[middle]) / 2;
+            } else {
+                return sortedValues[middle];
+            }
+        }
+
+        // Парсинг даты из различных форматов
+        function parseDate(value) {
+            if (!value && value !== 0) return null;
+            
+            // Если это число (Excel serial number)
+            if (typeof value === 'number') {
+                const excelEpoch = new Date(1899, 11, 30);
+                const date = new Date(excelEpoch.getTime() + value * 86400000);
+                
+                if (value > 60) {
+                    date.setTime(date.getTime() - 86400000);
+                }
+                
+                return date;
+            }
+            
+            // Если это объект Date
+            if (value instanceof Date) {
+                return value;
+            }
+            
+            const strValue = value.toString().trim();
+            
+            // Пытаемся разобрать как ISO дату
+            let date = new Date(strValue);
+            if (!isNaN(date.getTime())) {
+                return date;
+            }
+            
+            // Формат DD.MM.YYYY HH:MM:SS
+            const match1 = strValue.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:\s+(\d{1,2}):(\d{1,2}):(\d{1,2}))?$/);
+            if (match1) {
+                const day = parseInt(match1[1], 10);
+                const month = parseInt(match1[2], 10) - 1;
+                const year = parseInt(match1[3], 10);
+                date = new Date(year, month, day);
+                return date;
+            }
+            
+            // Формат DD.MM.YYYY
+            const match2 = strValue.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+            if (match2) {
+                const day = parseInt(match2[1], 10);
+                const month = parseInt(match2[2], 10) - 1;
+                const year = parseInt(match2[3], 10);
+                date = new Date(year, month, day);
+                return date;
+            }
+            
+            // Формат YYYY-MM-DD
+            const match3 = strValue.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+            if (match3) {
+                const year = parseInt(match3[1], 10);
+                const month = parseInt(match3[2], 10) - 1;
+                const day = parseInt(match3[3], 10);
+                date = new Date(year, month, day);
+                return date;
+            }
+            
+            return null;
+        }
+
+        // Форматирование даты на русском
+        function formatDate(date) {
+            return date.toLocaleDateString('ru-RU', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+            });
+        }
+
+        // Форматирование числа с разделителями
+        function formatNumber(num, decimals = 0) {
+            if (num === null || num === undefined) return '0';
+            return num.toLocaleString('ru-RU', {
+                minimumFractionDigits: decimals,
+                maximumFractionDigits: decimals
+            });
+        }
+
+        // Форматирование суммы денег
+        function formatCurrency(num) {
+            if (num === null || num === undefined) return '0 ₽';
+            
+            if (Math.abs(num) >= 1000000000) {
+                return (num / 1000000000).toFixed(2) + ' млрд ₽';
+            } else if (Math.abs(num) >= 1000000) {
+                return (num / 1000000).toFixed(2) + ' млн ₽';
+            } else if (Math.abs(num) >= 1000) {
+                return (num / 1000).toFixed(2) + ' тыс ₽';
+            } else {
+                return formatNumber(num, 2) + ' ₽';
+            }
+        }
+
+        // Форматирование процента падения цены
+        function formatPriceDrop(percent) {
+            if (percent === null || percent === undefined || percent === 0) return '0%';
+            
+            // Округляем до 1 знака после запятой
+            const rounded = Math.round(percent * 10) / 10;
+            
+            // Добавляем знак + для положительных значений (падение цены)
+            const sign = rounded > 0 ? '+' : '';
+            
+            // Если падение отрицательное (цена выросла), показываем как есть
+            return `${sign}${formatNumber(rounded, 1)}%`;
+        }
+
+        // Получение названия категории типа закупки
+        function getProcurementTypeName(category) {
+            switch(category) {
+                case '44': return '44-ФЗ';
+                case '223': return '223-ФЗ';
+                case 'commercial': return 'Коммерция';
+                case 'other': return 'Прочие';
+                default: return category;
+            }
+        }
+
+        // Получение класса CSS для типа закупки
+        function getProcurementTypeClass(category) {
+            switch(category) {
+                case '44': return 'type-44';
+                case '223': return 'type-223';
+                case 'commercial': return 'type-commercial';
+                case 'other': return 'type-other';
+                default: return '';
+            }
+        }
+
+        // Получение класса CSS для индикатора падения цены
+        function getPriceDropClass(percent) {
+            if (percent > 0) return 'drop-indicator positive'; // Падение цены (хорошо для заказчика)
+            if (percent < 0) return 'drop-indicator'; // Рост цены (плохо)
+            return '';
+        }
+
+        // Показать результаты
+        function displayResults(minDate, maxDate, daysDiff, monthsDiff, totalTenders, validDates, analysisResult) {
+            // Сохраняем данные
+            procurementData = {
+                ...procurementData,
+                ...analysisResult
+            };
+            
+            // Форматируем даты
+            const formattedMinDate = formatDate(minDate);
+            const formattedMaxDate = formatDate(maxDate);
+            
+            // Устанавливаем значения
+            periodRange.textContent = `${formattedMinDate} — ${formattedMaxDate}`;
+            periodDays.textContent = `Период: ${formatNumber(daysDiff)} дней (примерно ${monthsDiff} месяцев)`;
+            
+            // Создаем статистику
+            statsGrid.innerHTML = `
+                <div class="stat-item">
+                    <div class="stat-label">Всего Тендеров</div>
+                    <div class="stat-value">${formatNumber(totalTenders)}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Дней в Периоде</div>
+                    <div class="stat-value">${formatNumber(daysDiff)}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Валидных Дат</div>
+                    <div class="stat-value">${formatNumber(validDates)}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Лет в выборке</div>
+                    <div class="stat-value">${procurementData.years.length}</div>
+                </div>
+            `;
+            
+            // Показываем результаты
+            loading.style.display = 'none';
+            resultsSection.style.display = 'block';
+            resultCard.style.display = 'block';
+            errorCard.style.display = 'none';
+            
+            // Инициализируем вкладки годов
+            initYearTabs();
+            
+            // Инициализируем фильтры
+            initFilters();
+            
+            // Рендерим статистику
+            renderSummaryStats();
+            renderDetailedStats();
+            
+            // Показываем карточки
+            summaryStatsCard.style.display = 'block';
+            detailedStatsCard.style.display = 'block';
+            exportSection.style.display = 'block';
+            
+            // Создаем графики
+            createCharts();
+        }
+
+        // Инициализация вкладок годов
+        function initYearTabs() {
+            yearTabs.innerHTML = '';
+            
+            // Кнопка "Все годы"
+            const allYearsBtn = document.createElement('button');
+            allYearsBtn.className = `year-tab ${currentYear === 'all' ? 'active' : ''}`;
+            allYearsBtn.textContent = 'Все годы';
+            allYearsBtn.addEventListener('click', () => {
+                currentYear = 'all';
+                document.querySelectorAll('.year-tab').forEach(btn => btn.classList.remove('active'));
+                allYearsBtn.classList.add('active');
+                renderSummaryStats();
+            });
+            yearTabs.appendChild(allYearsBtn);
+            
+            // Кнопки для каждого года
+            procurementData.years.forEach(year => {
+                const yearBtn = document.createElement('button');
+                yearBtn.className = `year-tab ${currentYear === year ? 'active' : ''}`;
+                yearBtn.textContent = year;
+                yearBtn.addEventListener('click', () => {
+                    currentYear = year;
+                    document.querySelectorAll('.year-tab').forEach(btn => btn.classList.remove('active'));
+                    yearBtn.classList.add('active');
+                    renderSummaryStats();
+                });
+                yearTabs.appendChild(yearBtn);
+            });
+        }
+
+        // Инициализация фильтров
+        function initFilters() {
+            // Очищаем фильтры
+            detailedYearFilter.innerHTML = '<option value="all">Все годы</option>';
+            detailedTypeFilter.innerHTML = '<option value="all">Все типы</option>';
+            
+            // Добавляем годы в фильтр
+            procurementData.years.forEach(year => {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year;
+                detailedYearFilter.appendChild(option);
+            });
+            
+            // Добавляем типы в фильтр
+            procurementData.types.forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type.length > 30 ? type.substring(0, 30) + '...' : type;
+                detailedTypeFilter.appendChild(option);
+            });
+        }
+
+        // Рендеринг сводной статистики
+        function renderSummaryStats() {
+            if (!procurementData.summary || Object.keys(procurementData.summary).length === 0) return;
+            
+            const selectedYear = currentYear;
+            const selectedType = procurementTypeFilter.value;
+            const yearData = procurementData.summary[selectedYear] || {};
+            
+            let tableHTML = '';
+            let totalRow = {
+                count: 0,
+                sum: 0,
+                tendersWithBids: 0,
+                tendersWithPriceDrop: 0,
+                medianNmcc: 0,
+                medianBids: 0,
+                medianPriceDrop: 0
+            };
+            
+            // Порядок отображения типов
+            const typeOrder = ['44', '223', 'commercial', 'other'];
+            
+            typeOrder.forEach(typeCat => {
+                const data = yearData[typeCat];
+                if (!data) return;
+                
+                // Применяем фильтр по типу
+                if (selectedType !== 'all' && selectedType !== typeCat) return;
+                
+                const typeName = getProcurementTypeName(typeCat);
+                const typeClass = getProcurementTypeClass(typeCat);
+                const priceDropClass = getPriceDropClass(data.medianPriceDrop);
+                
+                tableHTML += `
+                    <tr class="type-row">
+                        <td>
+                            <span class="procurement-type-tag ${typeClass}">${typeName}</span>
+                        </td>
+                        <td>${selectedYear === 'all' ? 'Весь период' : selectedYear}</td>
+                        <td class="number-cell">${formatNumber(data.count)}</td>
+                        <td class="number-cell">${formatCurrency(data.sum)}</td>
+                        <td class="number-cell">${formatCurrency(data.medianNmcc)}</td>
+                        <td class="number-cell ${priceDropClass}">${formatPriceDrop(data.medianPriceDrop)}</td>
+                        <td class="number-cell">${formatNumber(data.medianBids, 1)}</td>
+                        <td class="number-cell">${formatNumber(data.tendersWithBids)}</td>
+                    </tr>
+                `;
+                
+                // Обновляем итоговую строку
+                totalRow.count += data.count;
+                totalRow.sum += data.sum;
+                totalRow.tendersWithBids += data.tendersWithBids;
+                totalRow.tendersWithPriceDrop += data.tendersWithPriceDrop;
+            });
+            
+            // Вычисляем общие медианы
+            const allNmccValues = [];
+            const allBidValues = [];
+            const allPriceDropValues = [];
+            
+            typeOrder.forEach(typeCat => {
+                const data = yearData[typeCat];
+                if (!data) return;
+                
+                if (selectedType === 'all' || selectedType === typeCat) {
+                    allNmccValues.push(...data.nmccValues);
+                    allBidValues.push(...data.bidValues);
+                    allPriceDropValues.push(...data.priceDropValues);
+                }
+            });
+            
+            totalRow.medianNmcc = calculateMedian(allNmccValues);
+            totalRow.medianBids = calculateMedian(allBidValues);
+            totalRow.medianPriceDrop = calculateMedian(allPriceDropValues);
+            
+            // Добавляем итоговую строку
+            const totalPriceDropClass = getPriceDropClass(totalRow.medianPriceDrop);
+            
+            tableHTML += `
+                <tr class="total-row">
+                    <td><strong>Итого</strong></td>
+                    <td></td>
+                    <td class="number-cell"><strong>${formatNumber(totalRow.count)}</strong></td>
+                    <td class="number-cell"><strong>${formatCurrency(totalRow.sum)}</strong></td>
+                    <td class="number-cell"><strong>${formatCurrency(totalRow.medianNmcc)}</strong></td>
+                    <td class="number-cell ${totalPriceDropClass}"><strong>${formatPriceDrop(totalRow.medianPriceDrop)}</strong></td>
+                    <td class="number-cell"><strong>${formatNumber(totalRow.medianBids, 1)}</strong></td>
+                    <td class="number-cell"><strong>${formatNumber(totalRow.tendersWithBids)}</strong></td>
+                </tr>
+            `;
+            
+            summaryStatsBody.innerHTML = tableHTML;
+            
+            // Обновляем графики
+            updateCharts();
+        }
+
+        // Сортировка детализированной статистики
+        function sortDetailedStats() {
+            if (!procurementData.detailed) return;
+            
+            procurementData.detailed.sort((a, b) => {
+                switch(currentSort) {
+                    case 'year-desc':
+                        return b.year - a.year || a.type.localeCompare(b.type) || a.method.localeCompare(b.method);
+                    case 'type-asc':
+                        return a.type.localeCompare(b.type) || b.year - a.year || a.method.localeCompare(b.method);
+                    case 'count-desc':
+                        return b.count - a.count || b.year - a.year || a.type.localeCompare(b.type);
+                    default:
+                        return b.year - a.year || a.type.localeCompare(b.type) || a.method.localeCompare(b.method);
+                }
+            });
+        }
+
+        // Рендеринг детализированной статистики
+        function renderDetailedStats() {
+            if (!procurementData.detailed || procurementData.detailed.length === 0) return;
+            
+            const selectedYear = detailedYearFilter.value;
+            const selectedType = detailedTypeFilter.value;
+            
+            let tableHTML = '';
+            let currentYear = null;
+            
+            procurementData.detailed.forEach(item => {
+                // Применяем фильтры
+                if (selectedYear !== 'all' && item.year != selectedYear) return;
+                if (selectedType !== 'all' && item.type !== selectedType) return;
+                
+                // Добавляем заголовок года, если год изменился
+                if (item.year !== currentYear) {
+                    currentYear = item.year;
+                    tableHTML += `
+                        <tr class="year-row">
+                            <td colspan="8"><strong>${currentYear} год</strong></td>
+                        </tr>
+                    `;
+                }
+                
+                const typeClass = getProcurementTypeClass(item.typeCategory);
+                const priceDropClass = getPriceDropClass(item.medianPriceDrop);
+                
+                tableHTML += `
+                    <tr>
+                        <td>${item.year}</td>
+                        <td>
+                            <span class="procurement-type-tag ${typeClass}">${getProcurementTypeName(item.typeCategory)}</span>
+                            <div style="margin-top: 4px; font-size: 12px; color: var(--color-text-secondary);">
+                                ${item.type}
+                            </div>
+                        </td>
+                        <td>${item.method}</td>
+                        <td class="number-cell">${formatNumber(item.count)}</td>
+                        <td class="number-cell">${formatCurrency(item.sum)}</td>
+                        <td class="number-cell">${formatCurrency(item.medianNmcc)}</td>
+                        <td class="number-cell ${priceDropClass}">${formatPriceDrop(item.medianPriceDrop)}</td>
+                        <td class="number-cell">${formatNumber(item.medianBids, 1)}</td>
+                    </tr>
+                `;
+            });
+            
+            detailedStatsBody.innerHTML = tableHTML || '<tr><td colspan="8" style="text-align: center;">Нет данных для отображения</td></tr>';
+        }
+
+        // Создание графиков
+        function createCharts() {
+            // Уничтожаем старые графики, если они есть
+            if (charts.nmccChart) charts.nmccChart.destroy();
+            if (charts.priceDropChart) charts.priceDropChart.destroy();
+            if (charts.bidsChart) charts.bidsChart.destroy();
+            
+            const nmccCtx = document.getElementById('nmccChart').getContext('2d');
+            const priceDropCtx = document.getElementById('priceDropChart').getContext('2d');
+            const bidsCtx = document.getElementById('bidsChart').getContext('2d');
+            
+            // Данные для графиков
+            const years = procurementData.years;
+            const typeCategories = ['44', '223', 'commercial', 'other'];
+            
+            // Подготовка данных для графиков
+            const nmccData = { labels: years, datasets: [] };
+            const priceDropData = { labels: years, datasets: [] };
+            const bidsData = { labels: years, datasets: [] };
+            
+            // Цвета для типов закупок
+            const colors = {
+                '44': { background: 'rgba(34, 197, 94, 0.2)', border: 'rgb(34, 197, 94)' },
+                '223': { background: 'rgba(59, 130, 246, 0.2)', border: 'rgb(59, 130, 246)' },
+                'commercial': { background: 'rgba(168, 75, 47, 0.2)', border: 'rgb(168, 75, 47)' },
+                'other': { background: 'rgba(156, 163, 175, 0.2)', border: 'rgb(156, 163, 175)' }
+            };
+            
+            // Создаем наборы данных для каждого типа
+            typeCategories.forEach(typeCat => {
+                const typeName = getProcurementTypeName(typeCat);
+                const color = colors[typeCat] || colors.other;
+                
+                // Данные для НМЦК
+                const nmccValues = years.map(year => {
+                    const yearData = procurementData.summary[year];
+                    if (!yearData || !yearData[typeCat]) return 0;
+                    return yearData[typeCat].sum / 1000000; // В млн руб
+                });
+                
+                // Данные для падения цены
+                const priceDropValues = years.map(year => {
+                    const yearData = procurementData.summary[year];
+                    if (!yearData || !yearData[typeCat]) return 0;
+                    return yearData[typeCat].medianPriceDrop;
+                });
+                
+                // Данные для заявок
+                const bidsValues = years.map(year => {
+                    const yearData = procurementData.summary[year];
+                    if (!yearData || !yearData[typeCat]) return 0;
+                    return yearData[typeCat].medianBids;
+                });
+                
+                // Добавляем набор данных для НМЦК
+                nmccData.datasets.push({
+                    label: typeName,
+                    data: nmccValues,
+                    backgroundColor: color.background,
+                    borderColor: color.border,
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                });
+                
+                // Добавляем набор данных для падения цены
+                priceDropData.datasets.push({
+                    label: typeName,
+                    data: priceDropValues,
+                    backgroundColor: color.background,
+                    borderColor: color.border,
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                });
+                
+                // Добавляем набор данных для заявок
+                bidsData.datasets.push({
+                    label: typeName,
+                    data: bidsValues,
+                    backgroundColor: color.background,
+                    borderColor: color.border,
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                });
+            });
+            
+            // Создаем график НМЦК
+            charts.nmccChart = new Chart(nmccCtx, {
+                type: 'line',
+                data: nmccData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    label += formatCurrency(context.raw * 1000000).replace(' ₽', ' млн ₽');
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Сумма НМЦК, млн ₽'
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Создаем график падения цены
+            charts.priceDropChart = new Chart(priceDropCtx, {
+                type: 'line',
+                data: priceDropData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    label += formatPriceDrop(context.raw);
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: 'Медиана % падения цены'
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Создаем график заявок
+            charts.bidsChart = new Chart(bidsCtx, {
+                type: 'line',
+                data: bidsData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    label += formatNumber(context.raw, 1) + ' заявок';
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Медиана количества заявок'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Обновление графиков
+        function updateCharts() {
+            if (!charts.nmccChart || !charts.priceDropChart || !charts.bidsChart) return;
+            
+            // Здесь можно обновить данные графиков при изменении фильтров
+            // В текущей реализации графики показывают данные за все годы
+        }
+
+        // Экспорт в Word
+        function exportToWord() {
+            showExportProgress('Подготовка отчета в формате Word...');
+            
+            // Создаем HTML-контент для Word
+            const htmlContent = generateWordContent();
+            
+            // Создаем Blob с HTML содержимым
+            const blob = new Blob([htmlContent], { type: 'text/html' });
+            
+            // Создаем ссылку для скачивания
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Анализ_тендеров_${new Date().toISOString().split('T')[0]}.doc`;
+            
+            // Добавляем ссылку в DOM, кликаем и удаляем
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            hideExportProgress();
+        }
+
+        // Генерация контента для Word
+        function generateWordContent() {
+            const date = new Date();
+            const formattedDate = date.toLocaleDateString('ru-RU');
+            
+            // Генерация таблиц
+            const summaryTableHTML = generateSummaryTableHTML();
+            const detailedTableHTML = generateDetailedTableHTML();
+            
+            // Получаем графики как изображения base64
+            let nmccChartImage = '';
+            let priceDropChartImage = '';
+            let bidsChartImage = '';
+            
+            try {
+                const nmccChartCanvas = document.getElementById('nmccChart');
+                const priceDropChartCanvas = document.getElementById('priceDropChart');
+                const bidsChartCanvas = document.getElementById('bidsChart');
+                
+                if (nmccChartCanvas) {
+                    nmccChartImage = nmccChartCanvas.toDataURL('image/png');
+                }
+                if (priceDropChartCanvas) {
+                    priceDropChartImage = priceDropChartCanvas.toDataURL('image/png');
+                }
+                if (bidsChartCanvas) {
+                    bidsChartImage = bidsChartCanvas.toDataURL('image/png');
+                }
+            } catch (error) {
+                console.error('Ошибка при конвертации графиков:', error);
+            }
+            
+            return `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Анализ тендеров</title>
+    <style>
+        body {
+            font-family: 'Calibri', 'Arial', sans-serif;
+            line-height: 1.6;
+            margin: 2cm;
+        }
+        h1 {
+            color: #218085;
+            font-size: 24pt;
+            margin-bottom: 20px;
+        }
+        h2 {
+            color: #218085;
+            font-size: 18pt;
+            margin-top: 30px;
+            margin-bottom: 15px;
+        }
+        h3 {
+            color: #333;
+            font-size: 14pt;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        .report-header {
+            border-bottom: 2px solid #218085;
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+        }
+        .report-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            font-size: 11pt;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 10pt;
+        }
+        th {
+            background-color: #218085;
+            color: white;
+            padding: 8px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+        td {
+            padding: 8px;
+            border: 1px solid #ddd;
+        }
+        .number-cell {
+            text-align: right;
+        }
+        .total-row {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        .year-row {
+            background-color: #e8f4f8;
+            font-weight: bold;
+        }
+        .type-tag {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 9pt;
+            font-weight: bold;
+            margin-right: 5px;
+        }
+        .type-44 { background-color: #d1fae5; color: #065f46; }
+        .type-223 { background-color: #dbeafe; color: #1e40af; }
+        .type-commercial { background-color: #fed7aa; color: #7c2d12; }
+        .type-other { background-color: #e5e7eb; color: #374151; }
+        .positive { color: #059669; }
+        .negative { color: #dc2626; }
+        .stat-block {
+            display: flex;
+            justify-content: space-between;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+        .stat-item {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            width: 23%;
+            min-width: 200px;
+            margin-bottom: 10px;
+        }
+        .stat-label {
+            font-size: 10pt;
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            font-size: 18pt;
+            font-weight: bold;
+            color: #218085;
+        }
+        .chart-container {
+            margin: 30px 0;
+            text-align: center;
+        }
+        .chart-image {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .chart-title {
+            font-size: 16pt;
+            color: #218085;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #dee2e6;
+            font-size: 9pt;
+            color: #6c757d;
+        }
+        @media print {
+            body {
+                margin: 1cm;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="report-header">
+        <h1>Анализ тендеров</h1>
+        <div class="report-info">
+            <div>
+                <strong>Исходный файл:</strong> ${procurementData.fileName}<br>
+                <strong>Дата анализа:</strong> ${procurementData.analysisDate}
+            </div>
+            <div>
+                <strong>Период анализа:</strong><br>
+                ${periodRange.textContent}<br>
+                ${periodDays.textContent}
+            </div>
+        </div>
+        
+        <div class="stat-block">
+            <div class="stat-item">
+                <div class="stat-label">Всего Тендеров</div>
+                <div class="stat-value">${document.getElementById('statsGrid').children[0]?.querySelector('.stat-value')?.textContent || '0'}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Дней в Периоде</div>
+                <div class="stat-value">${document.getElementById('statsGrid').children[1]?.querySelector('.stat-value')?.textContent || '0'}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Валидных Дат</div>
+                <div class="stat-value">${document.getElementById('statsGrid').children[2]?.querySelector('.stat-value')?.textContent || '0'}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Лет в выборке</div>
+                <div class="stat-value">${procurementData.years.length}</div>
+            </div>
+        </div>
+    </div>
+    
+    <h2>Укрупненная статистика по типам закупок</h2>
+    ${summaryTableHTML}
+    
+    <h2>Детализированная статистика с разбивкой по годам</h2>
+    ${detailedTableHTML}
+    
+    <!-- ГРАФИКИ -->
+    ${nmccChartImage ? `
+    <div class="chart-container">
+        <div class="chart-title">Динамика суммы НМЦК по годам</div>
+        <img src="${nmccChartImage}" alt="График динамики суммы НМЦК" class="chart-image" />
+    </div>
+    ` : ''}
+    
+    ${priceDropChartImage ? `
+    <div class="chart-container">
+        <div class="chart-title">Динамика медианы % падения цены по годам</div>
+        <img src="${priceDropChartImage}" alt="График динамики медианы падения цены" class="chart-image" />
+    </div>
+    ` : ''}
+    
+    ${bidsChartImage ? `
+    <div class="chart-container">
+        <div class="chart-title">Динамика медианы количества заявок по годам</div>
+        <img src="${bidsChartImage}" alt="График динамики медианы количества заявок" class="chart-image" />
+    </div>
+    ` : ''}
+    
+    <h2>Ключевые выводы</h2>
+    <h3>1. Общие показатели</h3>
+    <ul>
+        <li>Всего проанализировано тендеров: ${document.getElementById('statsGrid').children[0]?.querySelector('.stat-value')?.textContent || '0'}</li>
+        <li>Период анализа охватывает: ${periodDays.textContent}</li>
+        <li>Анализ проведен по данным за ${procurementData.years.length} ${procurementData.years.length === 1 ? 'год' : procurementData.years.length < 5 ? 'года' : 'лет'}</li>
+    </ul>
+    
+    <h3>2. Распределение по типам закупок</h3>
+    <ul>
+        ${generateTypeDistributionList()}
+    </ul>
+    
+    <h3>3. Рекомендации</h3>
+    <ul>
+        <li>Обратить внимание на типы закупок с высокой медианой падения цены</li>
+        <li>Проанализировать конкурентность по типам закупок с низким количеством заявок</li>
+        <li>Рассмотреть возможность оптимизации процедур закупок для типов с высокими ценами</li>
+    </ul>
+    
+    <div class="footer">
+        <p>Отчет сгенерирован автоматически с помощью Анализатора тендеров</p>
+        <p>Дата формирования отчета: ${formattedDate}</p>
+    </div>
+</body>
+</html>`;
+        }
+
+        // Генерация HTML для сводной таблицы
+        function generateSummaryTableHTML() {
+            let html = '<table>';
+            html += `
+                <thead>
+                    <tr>
+                        <th>Тип закупки</th>
+                        <th>Год</th>
+                        <th>Кол-во тендеров</th>
+                        <th>Сумма НМЦК</th>
+                        <th>Медиана НМЦК</th>
+                        <th>Медиана % падения цены</th>
+                        <th>Медиана заявок</th>
+                        <th>Тендеров с заявками</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            
+            const yearData = procurementData.summary['all'] || {};
+            const typeOrder = ['44', '223', 'commercial', 'other'];
+            
+            typeOrder.forEach(typeCat => {
+                const data = yearData[typeCat];
+                if (!data) return;
+                
+                const typeName = getProcurementTypeName(typeCat);
+                const typeClass = `type-${typeCat}`;
+                const priceDropClass = data.medianPriceDrop > 0 ? 'positive' : data.medianPriceDrop < 0 ? 'negative' : '';
+                
+                html += `
+                    <tr>
+                        <td><span class="type-tag ${typeClass}">${typeName}</span></td>
+                        <td>Весь период</td>
+                        <td class="number-cell">${formatNumber(data.count)}</td>
+                        <td class="number-cell">${formatCurrency(data.sum)}</td>
+                        <td class="number-cell">${formatCurrency(data.medianNmcc)}</td>
+                        <td class="number-cell ${priceDropClass}">${formatPriceDrop(data.medianPriceDrop)}</td>
+                        <td class="number-cell">${formatNumber(data.medianBids, 1)}</td>
+                        <td class="number-cell">${formatNumber(data.tendersWithBids)}</td>
+                    </tr>`;
+            });
+            
+            // Итоговая строка
+            const allNmccValues = [];
+            const allBidValues = [];
+            const allPriceDropValues = [];
+            let totalCount = 0;
+            let totalSum = 0;
+            let totalTendersWithBids = 0;
+            
+            typeOrder.forEach(typeCat => {
+                const data = yearData[typeCat];
+                if (!data) return;
+                
+                totalCount += data.count;
+                totalSum += data.sum;
+                totalTendersWithBids += data.tendersWithBids;
+                allNmccValues.push(...data.nmccValues);
+                allBidValues.push(...data.bidValues);
+                allPriceDropValues.push(...data.priceDropValues);
+            });
+            
+            const totalMedianNmcc = calculateMedian(allNmccValues);
+            const totalMedianBids = calculateMedian(allBidValues);
+            const totalMedianPriceDrop = calculateMedian(allPriceDropValues);
+            const totalPriceDropClass = totalMedianPriceDrop > 0 ? 'positive' : totalMedianPriceDrop < 0 ? 'negative' : '';
+            
+            html += `
+                <tr class="total-row">
+                    <td><strong>Итого</strong></td>
+                    <td></td>
+                    <td class="number-cell"><strong>${formatNumber(totalCount)}</strong></td>
+                    <td class="number-cell"><strong>${formatCurrency(totalSum)}</strong></td>
+                    <td class="number-cell"><strong>${formatCurrency(totalMedianNmcc)}</strong></td>
+                    <td class="number-cell ${totalPriceDropClass}"><strong>${formatPriceDrop(totalMedianPriceDrop)}</strong></td>
+                    <td class="number-cell"><strong>${formatNumber(totalMedianBids, 1)}</strong></td>
+                    <td class="number-cell"><strong>${formatNumber(totalTendersWithBids)}</strong></td>
+                </tr>`;
+            
+            html += '</tbody></table>';
+            return html;
+        }
+
+        // Генерация HTML для детализированной таблицы
+        function generateDetailedTableHTML() {
+            let html = '<table>';
+            html += `
+                <thead>
+                    <tr>
+                        <th>Год</th>
+                        <th>Тип закупки</th>
+                        <th>Способ размещения</th>
+                        <th>Кол-во тендеров</th>
+                        <th>Сумма НМЦК</th>
+                        <th>Медиана НМЦК</th>
+                        <th>Медиана % падения</th>
+                        <th>Медиана заявок</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            
+            // Группируем по году для отображения
+            const groupedByYear = {};
+            procurementData.detailed.forEach(item => {
+                if (!groupedByYear[item.year]) {
+                    groupedByYear[item.year] = [];
+                }
+                groupedByYear[item.year].push(item);
+            });
+            
+            // Сортируем годы по убыванию
+            const sortedYears = Object.keys(groupedByYear).sort((a, b) => b - a);
+            
+            sortedYears.forEach(year => {
+                html += `<tr class="year-row"><td colspan="8"><strong>${year} год</strong></td></tr>`;
+                
+                const yearItems = groupedByYear[year];
+                yearItems.forEach(item => {
+                    const typeClass = `type-${item.typeCategory}`;
+                    const priceDropClass = item.medianPriceDrop > 0 ? 'positive' : item.medianPriceDrop < 0 ? 'negative' : '';
+                    
+                    html += `
+                        <tr>
+                            <td>${item.year}</td>
+                            <td>
+                                <span class="type-tag ${typeClass}">${getProcurementTypeName(item.typeCategory)}</span>
+                                <div style="font-size: 9pt; color: #666; margin-top: 2px;">${item.type}</div>
+                            </td>
+                            <td>${item.method}</td>
+                            <td class="number-cell">${formatNumber(item.count)}</td>
+                            <td class="number-cell">${formatCurrency(item.sum)}</td>
+                            <td class="number-cell">${formatCurrency(item.medianNmcc)}</td>
+                            <td class="number-cell ${priceDropClass}">${formatPriceDrop(item.medianPriceDrop)}</td>
+                            <td class="number-cell">${formatNumber(item.medianBids, 1)}</td>
+                        </tr>`;
+                });
+            });
+            
+            html += '</tbody></table>';
+            return html;
+        }
+
+        // Генерация списка распределения по типам
+        function generateTypeDistributionList() {
+            let listItems = '';
+            const yearData = procurementData.summary['all'] || {};
+            const typeOrder = ['44', '223', 'commercial', 'other'];
+            
+            typeOrder.forEach(typeCat => {
+                const data = yearData[typeCat];
+                if (!data) return;
+                
+                const typeName = getProcurementTypeName(typeCat);
+                listItems += `<li>${typeName}: ${formatNumber(data.count)} тендеров (${formatCurrency(data.sum)})</li>`;
+            });
+            
+            return listItems;
+        }
+
+        // Экспорт в Excel
+        function exportToExcel() {
+            showExportProgress('Подготовка отчета в формате Excel...');
+            
+            // Создаем новую рабочую книгу
+            const wb = XLSX.utils.book_new();
+            
+            // Лист со сводной статистикой
+            const summaryData = [['Укрупненная статистика по типам закупок']];
+            summaryData.push(['Тип закупки', 'Год', 'Кол-во тендеров', 'Сумма НМЦК', 'Медиана НМЦК', 'Медиана % падения цены', 'Медиана заявок', 'Тендеров с заявками']);
+            
+            const yearData = procurementData.summary['all'] || {};
+            const typeOrder = ['44', '223', 'commercial', 'other'];
+            
+            typeOrder.forEach(typeCat => {
+                const data = yearData[typeCat];
+                if (!data) return;
+                
+                const typeName = getProcurementTypeName(typeCat);
+                summaryData.push([
+                    typeName,
+                    'Весь период',
+                    data.count,
+                    data.sum,
+                    data.medianNmcc,
+                    data.medianPriceDrop,
+                    data.medianBids,
+                    data.tendersWithBids
+                ]);
+            });
+            
+            const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+            XLSX.utils.book_append_sheet(wb, wsSummary, 'Сводная статистика');
+            
+            // Лист с детализированной статистикой
+            const detailedData = [['Детализированная статистика с разбивкой по годам']];
+            detailedData.push(['Год', 'Тип закупки', 'Категория', 'Способ размещения', 'Кол-во тендеров', 'Сумма НМЦК', 'Медиана НМЦК', 'Медиана % падения', 'Медиана заявок']);
+            
+            procurementData.detailed.forEach(item => {
+                detailedData.push([
+                    item.year,
+                    item.type,
+                    getProcurementTypeName(item.typeCategory),
+                    item.method,
+                    item.count,
+                    item.sum,
+                    item.medianNmcc,
+                    item.medianPriceDrop,
+                    item.medianBids
+                ]);
+            });
+            
+            const wsDetailed = XLSX.utils.aoa_to_sheet(detailedData);
+            XLSX.utils.book_append_sheet(wb, wsDetailed, 'Детализированная статистика');
+            
+            // Сохраняем файл
+            XLSX.writeFile(wb, `Анализ_тендеров_${new Date().toISOString().split('T')[0]}.xlsx`);
+            hideExportProgress();
+        }
+
+        // Показать прогресс экспорта
+        function showExportProgress(message) {
+            exportProgress.style.display = 'block';
+            exportProgressText.textContent = message;
+        }
+
+        // Скрыть прогресс экспорта
+        function hideExportProgress() {
+            exportProgress.style.display = 'none';
+        }
+
+        // Показать ошибку
+        function showError(message) {
+            loading.style.display = 'none';
+            resultsSection.style.display = 'block';
+            resultCard.style.display = 'none';
+            summaryStatsCard.style.display = 'none';
+            detailedStatsCard.style.display = 'none';
+            exportSection.style.display = 'none';
+            errorCard.style.display = 'flex';
+            errorText.textContent = message;
+        }
+
+        // Показать информацию о файле
+        function showFileInfo(file) {
+            const sizeInMB = (file.size / (1024 * 1024)).toFixed(2);
+            
+            fileName.textContent = file.name;
+            fileSize.textContent = `${sizeInMB} МБ`;
+            fileInfo.style.display = 'flex';
+        }
+
+        // Сброс формы
+        function resetForm() {
+            // Очищаем результаты и ошибки
+            resultsSection.style.display = 'none';
+            loading.style.display = 'none';
+            
+            // Скрываем информацию о файле
+            fileInfo.style.display = 'none';
+            
+            // Очищаем результаты
+            periodRange.textContent = '';
+            periodDays.textContent = '';
+            statsGrid.innerHTML = '';
+            summaryStatsBody.innerHTML = '';
+            detailedStatsBody.innerHTML = '';
+            yearTabs.innerHTML = '';
+            
+            // Скрываем карточки статистики
+            summaryStatsCard.style.display = 'none';
+            detailedStatsCard.style.display = 'none';
+            exportSection.style.display = 'none';
+            
+            // Очищаем ошибку
+            errorCard.style.display = 'none';
+            
+            // Уничтожаем графики
+            if (charts.nmccChart) charts.nmccChart.destroy();
+            if (charts.priceDropChart) charts.priceDropChart.destroy();
+            if (charts.bidsChart) charts.bidsChart.destroy();
+            
+            // Сбрасываем данные
+            procurementData = {
+                summary: {},
+                detailed: [],
+                years: [],
+                types: [],
+                methods: [],
+                fileName: '',
+                analysisDate: ''
+            };
+            
+            // Очищаем значение input чтобы можно было выбрать тот же файл снова
+            fileInput.value = '';
+        }
+
+        // Инициализация при загрузке страницы
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Приложение для анализа тендеров с динамикой по годам готово к работе');
+            document.querySelector('[data-sort="year-desc"]').classList.add('active');
+        });
+    </script>
+</body>
+</html>
